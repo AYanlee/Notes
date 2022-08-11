@@ -119,3 +119,218 @@ i r eax          // Information Register eax(显示指定寄存器内容)
 
 退出：q
 
+---
+
+## 以下来自Operating System From 0 to 1
+
+###### command： run
+
+在此之前，要用gdb进行debug，首先要加载文件，有两种方法：
+
+* 直接执行gdb命令，然后在进入gdb之后执行：file <filename>
+* 执行gdb filename（可执行文件，最好带-g编译）
+
+```
+(gdb)  r 
+```
+
+就可以让文件运行起来，但是如果没有断点或者`int 3`的汇编指令（interrupt而非定义整数3）会执行到最后.
+
+```c
+1 #include <stdio.h>
+2
+3 int main(int argc, char *argv[])
+4 {
+5 printf("Hello World!\n");
+6 return 0;
+7 }
+```
+
+正常结束显示：
+
+---
+
+`Starting program: /tmp/hello
+Hello World!
+[Inferior 1 (process 1002) exited normally]`
+
+---
+
+###### command ：break / b
+
+```
+(gdb) b 3           //在第三行设置断点
+```
+
+执行`(gdb) r`显示信息：
+
+---
+
+`Starting program: /tmp/hello
+Breakpoint 1, main (argc=1, argv=0x7fffffffdfb8) at hello.c:5
+5 printf("Hello World!\n");`
+
+---
+
+一个断点，在hello.c的main函数中，但是停在第五行（停在下一个可执行的语句之前）
+
+删除断点：
+
+* d：删除所有断点
+* d  num：删除第num个断点
+
+###### command： next/n
+
+这个指令执行当前行并且停在下一行，如果这一行是一个函数调用，不会进入到这个函数内部，会直接越过函数（依旧会执行，但不会显示调用函数内部详细信息）。
+
+依旧是`hello.c`的例子：
+
+```
+(gdb) b 5     //在第5行处设置断点
+```
+
+然后依次执行：
+
+```
+(gdb) r 
+(gdb) n
+```
+
+
+
+然后会输出以下内容：
+
+---
+
+```
+Hello World!
+6 return 0;          //这一行显示gdb停在什么地方
+```
+
+---
+
+###### Command ： step / s
+
+与next类似，执行当前行命令，停留在下一行。但当前行若为函数调用，则进入函数调用内部。
+
+```c
+#include <stdio.h>
+
+int add(int a, int b) {
+return a + b;
+}
+
+int main(int argc, char *argv[])
+{
+add(1, 2);
+printf("Hello World!\n");
+return 0;
+}
+```
+
+执行：
+
+```
+(gdb) b main           //在main函数处设置断点
+(gdb) r
+(gdb) s
+```
+
+在执行完step（s）之后输出内容：
+
+---
+
+```
+add (a=1, b=2) at hello.c:6
+6 return a + b;     //当前停在第6行 return 处
+```
+
+---
+
+###### command ： ni
+
+这个指令每次执行一个汇编指令（首先我们要知道我们每一个高级语言指令都是由一个或者多个汇编语言构成的），ni与n都是执行一条指令，但是n执行一条高级语言，而ni执行一条低级汇编语言；
+
+命令：`disassemble /m <function_name>` 例如还是上述调用一个add函数的例子：
+
+```
+disassemble /m main      //输出目标的汇编代码，/m参数是将汇编代码于高级语言语句相对应
+```
+
+![image-20220811090757214](F:\ayanlee\blog_file\gitlearn\learngit\GDB教程.assets\image-20220811090757214.png)
+
+![image-20220811090819006](F:\ayanlee\blog_file\gitlearn\learngit\GDB教程.assets\image-20220811090819006.png)
+
+上图对比可知有无参数m的区别（可能存在一些gdb版本中/m参数为/s）；
+
+![image-20220811092326383](F:\ayanlee\blog_file\gitlearn\learngit\GDB教程.assets\image-20220811092326383.png)
+
+可以说明很多高级语言的一个代码行会由一行或多行汇编代码实现
+
+###### command ： si
+
+si 和 ni 的关系就像s和n 的关系，不再展开；
+
+###### command ： x
+
+这个命令检查给定内存范围的内容。
+
+![image-20220811102306281](F:\ayanlee\blog_file\gitlearn\learngit\GDB教程.assets\image-20220811102306281.png)
+
+不加参数就会显示单一内存地址
+
+
+
+###### Command ： print/p
+
+可以将运行时文件相关变量打印出来
+
+###### command ： until
+
+执行的下一行内容，下一行行数一定比当前行大：多用于循环的调试，
+
+```c
+#include <stdio.h>
+
+
+int add1000() 
+{
+	int total = 0;
+
+	for (int i = 0; i < 1000; ++i)
+	{
+		total += i;
+	}
+	printf("Done adding!\n");
+    
+    return total;
+}
+int main(int argc, char *argv[])
+{
+	add1000();
+	printf("Hello World!\n");
+	return 0;
+}
+
+```
+
+例如该例子：如果用步进命令s进入到add1000函数调用中，第一次执行到`total +=1`时，逻辑上会再一次执行for循环的判断语句：`for(int i = 0; i < 1000; ++i)`,但是用until语句会直接跳转到循环结束，也就是执行printf函数（当然循环也会执行完成，只不过跳过了每次执行的细节，直接到循环结束）
+
+用法可以是执行`until`命令，在进入循环后执行；也可以用`until num`,可以到指定的确切行；
+
+
+
+###### Command : finish
+
+finish 命令执行到一个函数的结束，并且输出返回值
+
+![image-20220811113230999](F:\ayanlee\blog_file\gitlearn\learngit\GDB教程.assets\image-20220811113230999.png)
+
+命令`display`就是这么用的
+
+
+
+###### Command ： bt
+
+这个命令打印所有堆栈帧的back trace（回溯），看了例子就会理解：
+
